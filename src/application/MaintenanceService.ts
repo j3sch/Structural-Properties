@@ -11,7 +11,11 @@ export class MaintenanceService {
 	async pruneManagedState(): Promise<number> {
 		const existing = new Set(this.vault.getAllMarkdownFilePaths());
 		const removed = this.managedState.prune(existing);
-		await this.persist();
+		if (removed > 0) await this.persist();
 		return removed;
+	}
+
+	getManagedFileCount(): number {
+		return this.managedState.size;
 	}
 }

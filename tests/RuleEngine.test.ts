@@ -8,7 +8,8 @@ import { defaultSettings } from '../src/settings';
 import { ManagedStateStore } from '../src/domain/ManagedStateStore';
 import { hashValue } from '../src/utils/hash';
 import { MockVault, mockLinkGenerator } from './mocks';
-import type { StructuralMetadataSettings, StructuralRule } from '../src/types';
+import type { PluginSettings } from '../src/domain/plugin-data';
+import type { StructuralRule } from '../src/domain/rules';
 
 const patterns = ['{{folderPath}}/{{folderName}}.md', '{{folderPath}}/index.md'];
 
@@ -29,7 +30,7 @@ function makeEngine(): RuleEngine {
 	);
 }
 
-function settingsWith(rules: StructuralRule[]): StructuralMetadataSettings {
+function settingsWith(rules: StructuralRule[]): PluginSettings {
 	const s = defaultSettings();
 	s.folderNotePatterns = patterns;
 	s.rules = rules;
@@ -180,7 +181,7 @@ describe('RuleEngine', () => {
 		const engine = makeEngine();
 		const settings = defaultSettings();
 		settings.folderNotePatterns = patterns;
-		settings.linkStyle = 'obsidian-preference';
+		settings.defaults.linkStyle = 'obsidian-preference';
 		settings.rules = [
 			{
 				...linkRule,

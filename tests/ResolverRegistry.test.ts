@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultRegistry } from '../src/resolvers';
 import { ResolverRegistry } from '../src/domain/core/ResolverRegistry';
-import type { ResolverConfig, ResolverContext } from '../src/types';
+import type { ResolverConfig } from '../src/domain/rules';
+import type { ResolverContext } from '../src/domain/resolvers';
 import { MockVault, mockLinkGenerator } from './mocks';
 import { getParentFolderPath, getBaseName, getFileName } from '../src/utils/path';
 

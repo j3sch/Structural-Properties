@@ -3,7 +3,7 @@ import type {
 	PlannedChange,
 	ProcessorResult,
 } from '../domain/changes';
-import type { StructuralMetadataSettings } from '../domain/rules';
+import type { PluginSettings } from '../domain/plugin-data';
 import type { RuleEngine } from '../domain/core/RuleEngine';
 import type { FrontmatterRepository } from '../ports/FrontmatterRepository';
 import type { LinkGenerator } from '../ports/LinkGenerator';
@@ -17,8 +17,9 @@ export class ProcessingService {
 		private frontmatter: FrontmatterRepository,
 		private vault: VaultAccess,
 		private linkGenerator: LinkGenerator,
-		private getSettings: () => StructuralMetadataSettings,
+		private getSettings: () => PluginSettings,
 		private managedState: ManagedStateStore,
+		private persist: () => Promise<void>,
 		private reportError: (path: string, error: unknown) => void = (path, error) =>
 			console.error(`[Structural Properties] Failed to plan "${path}":`, error),
 	) {}
@@ -36,6 +37,7 @@ export class ProcessingService {
 			actionable,
 			this.managedState,
 		);
+		if (result.applied > 0) await this.persist();
 		return {
 			...result,
 			skipped: result.skipped + skipped,
@@ -96,7 +98,7 @@ export class ProcessingService {
 
 	private isProcessable(
 		path: string,
-		settings: StructuralMetadataSettings,
+		settings: PluginSettings,
 	): boolean {
 		if (!path.toLowerCase().endsWith('.md')) return false;
 		return !settings.excludePatterns.some((pattern) => matchGlob(path, pattern));

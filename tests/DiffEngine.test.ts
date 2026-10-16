@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DiffEngine } from '../src/domain/core/DiffEngine';
 import { hashValue } from '../src/utils/hash';
-import type { ResolverResult } from '../src/types';
+import type { ResolverResult } from '../src/domain/resolvers';
 
 const diff = new DiffEngine();
 

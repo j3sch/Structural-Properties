@@ -7,8 +7,9 @@ hardcoding a vault structure, you configure **rules** such as:
 > "If a file is in scope `01 Projects/**`, set the `project` property to the
 > ancestor folder note one level below `01 Projects`."
 
-The plugin updates notes automatically when they are created, moved or renamed,
-and provides dry-run and refresh commands so you stay in control of every write.
+The plugin can update notes automatically when they are created, moved, renamed,
+or opened, and provides dry-run and refresh commands so you stay in control of
+every write.
 
 ## How it works
 
@@ -67,12 +68,27 @@ All commands appear in the command palette under **Structural Properties**:
 
 Vault-wide writes should be reviewed with a dry run first.
 
+## Automatic updates
+
+Two global triggers control automatic processing:
+
+- **Update after structural changes** processes Markdown notes after creation,
+  moving, or renaming.
+- **Update when opening a note** processes the active Markdown note, including
+  the note restored when Obsidian starts.
+
+Both triggers are enabled by default and share a configurable debounce delay of
+750 ms. Disable both to use the plugin only through manual refresh commands.
+Trigger settings never disable the manual commands.
+
 ## Settings
 
 The settings tab provides:
 
-- **Defaults** — debounce delay, default write policy, on-no-match, link style,
-  global exclude patterns and folder-note patterns.
+- **Automatic updates** — structural-change and note-open triggers plus their
+  shared debounce delay.
+- **Defaults** — default write policy, on-no-match and link style.
+- **Patterns** — global exclude patterns and folder-note patterns.
 - **Rules** — enable/disable, edit, delete and add rules. Several **presets** are
   available to get started quickly.
 - **Test path** — enter a sample vault path to preview which rules match and what
@@ -117,8 +133,11 @@ plugin under **Settings → Community plugins**.
 
 > Requires Obsidian 1.13.0+ (declarative settings and `processFrontMatter`).
 
-Version 2 uses a new settings schema. Existing version 1 configuration is
-intentionally reset to safe defaults when the plugin first loads.
+Version 3 uses a new canonical settings schema. Existing version 2 configuration,
+rules, and managed state are intentionally discarded and immediately replaced
+with version 3 defaults when the plugin first loads. A one-time notice reports
+that reset. Back up `data.json` before upgrading if you want to reference the old
+rule definitions while configuring version 3.
 
 ## API documentation
 

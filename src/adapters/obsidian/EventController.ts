@@ -1,76 +1,69 @@
 import { Plugin, TAbstractFile, TFile, TFolder, Vault } from 'obsidian';
-import type { ProcessorResult } from '../../domain/changes';
-import type { ManagedStateStore } from '../../domain/ManagedStateStore';
-import { DebouncedPathQueue } from '../../application/DebouncedPathQueue';
-
-export interface EventControllerHost {
-	managedState: ManagedStateStore;
-	getDebounceMs: () => number;
-	processPaths: (paths: string[]) => Promise<ProcessorResult>;
-}
+import type { AutomaticUpdateService } from '../../application/AutomaticUpdateService';
+import { isActiveMarkdownFileRef, isMarkdownFileRef } from './eventFilters';
 
 export class EventController {
 	private started = false;
-	private queue: DebouncedPathQueue;
 
 	constructor(
 		private plugin: Plugin,
-		private host: EventControllerHost,
-	) {
-		this.queue = new DebouncedPathQueue(
-			async (paths) => {
-				try {
-					await this.host.processPaths(paths);
-				} catch (error) {
-					console.error('[Structural Properties] Processing queue error:', error);
-				}
-			},
-			this.host.getDebounceMs,
-			{
-				set: (callback, delayMs) => window.setTimeout(callback, delayMs),
-				clear: (id) => window.clearTimeout(id),
-			},
-		);
-	}
+		private automaticUpdates: AutomaticUpdateService,
+	) {}
 
 	start(): void {
 		if (this.started) return;
 		this.started = true;
-		this.plugin.app.workspace.onLayoutReady(() => this.registerEvents());
-	}
-
-	enqueue(path: string): void {
-		this.queue.enqueue(path);
+		this.plugin.app.workspace.onLayoutReady(() => {
+			if (!this.started) return;
+			this.registerEvents();
+			this.handleFileOpen(this.plugin.app.workspace.getActiveFile());
+		});
 	}
 
 	stop(): void {
-		this.queue.stop();
+		this.automaticUpdates.stop();
 		this.started = false;
 	}
 
 	private registerEvents(): void {
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('create', (file: TAbstractFile) => {
-				if (file instanceof TFile && file.extension === 'md') this.enqueue(file.path);
+				if (file instanceof TFile && isMarkdownFileRef(file)) {
+					this.automaticUpdates.handleCreated(file.path);
+				}
 			}),
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('rename', (file, oldPath) => this.handleRename(file, oldPath)),
 		);
+		this.plugin.registerEvent(
+			this.plugin.app.workspace.on('file-open', (file) => this.handleFileOpen(file)),
+		);
 	}
 
 	private handleRename(file: TAbstractFile, oldPath: string): void {
-		if (file instanceof TFile && file.extension === 'md') {
-			this.host.managedState.migratePath(oldPath, file.path);
-			this.enqueue(file.path);
+		if (file instanceof TFile) {
+			this.automaticUpdates.handleFileRenamed(
+				oldPath,
+				file.path,
+				isMarkdownFileRef(file),
+			);
 			return;
 		}
 		if (file instanceof TFolder) {
-			this.host.managedState.migratePrefix(oldPath, file.path);
+			const markdownPaths: string[] = [];
 			Vault.recurseChildren(file, (child) => {
-				if (child instanceof TFile && child.extension === 'md') this.enqueue(child.path);
+				if (child instanceof TFile && isMarkdownFileRef(child)) {
+					markdownPaths.push(child.path);
+				}
 			});
+			this.automaticUpdates.handleFolderRenamed(oldPath, file.path, markdownPaths);
 		}
 	}
 
+	private handleFileOpen(file: TFile | null): void {
+		const activeFile = this.plugin.app.workspace.getActiveFile();
+		if (!isActiveMarkdownFileRef(file, activeFile)) return;
+		this.automaticUpdates.handleOpened(file.path);
+	}
 }

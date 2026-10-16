@@ -1,36 +1,42 @@
-import { Plugin } from 'obsidian';
-import {
-	EventController,
-	type EventControllerHost,
-} from './adapters/obsidian/EventController';
+import { Notice, Plugin } from 'obsidian';
+import { EventController } from './adapters/obsidian/EventController';
 import { ObsidianFrontmatterRepository } from './adapters/obsidian/ObsidianFrontmatterRepository';
 import { ObsidianLinkGenerator } from './adapters/obsidian/ObsidianLinkGenerator';
 import { ObsidianPluginDataStore } from './adapters/obsidian/ObsidianPluginDataStore';
 import { ObsidianVaultAccess } from './adapters/obsidian/ObsidianVaultAccess';
 import { createPluginServices, type PluginServices } from './application/PluginServices';
+import { AutomaticUpdateService } from './application/AutomaticUpdateService';
+import { PersistenceCoordinator } from './application/PersistenceCoordinator';
 import { SettingsController } from './application/SettingsController';
 import { CommandHandlers } from './commands/CommandHandlers';
 import { registerCommands } from './commands';
-import type { StructuralMetadataSettings } from './domain/rules';
-import type { PluginDataStore } from './ports/PluginDataStore';
+import type { PluginData, PluginSettings } from './domain/plugin-data';
 import { ManagedStateStore } from './domain/ManagedStateStore';
 import { StructuralMetadataSettingsTab } from './ui/settings/SettingsTab';
 
 export default class StructuralMetadataPlugin extends Plugin {
-	settings!: StructuralMetadataSettings;
+	settings!: PluginSettings;
 	private managedState!: ManagedStateStore;
-	private dataStore!: PluginDataStore;
 	private services!: PluginServices;
 	private eventController!: EventController;
+	private persistence!: PersistenceCoordinator;
 
 	async onload(): Promise<void> {
-		this.dataStore = new ObsidianPluginDataStore(this);
-		this.settings = await this.dataStore.load();
-		this.managedState = new ManagedStateStore(this.settings.managedState);
-		await this.dataStore.save(this.settings);
+		const dataStore = new ObsidianPluginDataStore(this);
+		const loaded = await dataStore.load();
+		this.settings = loaded.data.settings;
+		this.managedState = new ManagedStateStore(loaded.data.managedState);
+		this.persistence = new PersistenceCoordinator(dataStore, () => this.snapshot());
+		await this.persistence.requestSave();
+		if (loaded.resetFromV2) {
+			new Notice(
+				'Structural properties 3 reset the previous settings and rules. Configure the plugin again in settings.',
+				10000,
+			);
+		}
 
 		const vault = new ObsidianVaultAccess(this.app);
-		const persist = (): Promise<void> => this.persist();
+		const persist = (): Promise<void> => this.persistence.requestSave();
 		this.services = createPluginServices({
 			frontmatter: new ObsidianFrontmatterRepository(this.app),
 			vault,
@@ -40,7 +46,7 @@ export default class StructuralMetadataPlugin extends Plugin {
 			persist,
 		});
 
-		const commands = new CommandHandlers(this.app, this.services, persist);
+		const commands = new CommandHandlers(this.app, this.services);
 		registerCommands(this, commands);
 		this.addSettingTab(
 			new StructuralMetadataSettingsTab(
@@ -50,27 +56,29 @@ export default class StructuralMetadataPlugin extends Plugin {
 			),
 		);
 
-		this.eventController = new EventController(this, this.eventHost(commands));
+		const automaticUpdates = new AutomaticUpdateService(
+			this.services.processing,
+			this.managedState,
+			() => this.settings,
+			persist,
+			{
+				set: (callback, delayMs) => window.setTimeout(callback, delayMs),
+				clear: (id) => window.clearTimeout(id),
+			},
+		);
+		this.eventController = new EventController(this, automaticUpdates);
 		this.eventController.start();
-		this.app.workspace.onLayoutReady(() => {
-			void this.services.maintenance.pruneManagedState();
-		});
 	}
 
 	onunload(): void {
 		this.eventController?.stop();
 	}
 
-	private eventHost(commands: CommandHandlers): EventControllerHost {
+	private snapshot(): PluginData {
 		return {
-			managedState: this.managedState,
-			getDebounceMs: () => this.settings.debounceMs,
-			processPaths: (paths) => commands.processPaths(paths),
+			schemaVersion: 3,
+			settings: this.settings,
+			managedState: this.managedState.state,
 		};
-	}
-
-	private async persist(): Promise<void> {
-		this.settings.managedState = this.managedState.state;
-		await this.dataStore.save(this.settings);
 	}
 }

@@ -1,4 +1,5 @@
-import type { ScopeConfig, StructuralMetadataSettings } from '../rules';
+import type { PluginSettings } from '../plugin-data';
+import type { ScopeConfig } from '../rules';
 import { compileGlob } from '../../utils/glob';
 import { getPathSegments } from '../../utils/path';
 
@@ -53,7 +54,7 @@ export class ScopeMatcher {
 	static matchesSettings(
 		filePath: string,
 		scope: ScopeConfig,
-		settings: StructuralMetadataSettings,
+		settings: PluginSettings,
 	): boolean {
 		return ScopeMatcher.matches(filePath, scope, settings.excludePatterns);
 	}

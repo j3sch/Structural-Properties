@@ -1,10 +1,11 @@
-import type { StructuralMetadataSettings, StructuralRule } from '../domain/rules';
+import type { PluginSettings } from '../domain/plugin-data';
+import type { StructuralRule } from '../domain/rules';
 import type { ManagedStateStore } from '../domain/ManagedStateStore';
 import { validateRule } from '../settings';
 
 export class RuleService {
 	constructor(
-		private getSettings: () => StructuralMetadataSettings,
+		private getSettings: () => PluginSettings,
 		private managedState: ManagedStateStore,
 		private persist: () => Promise<void>,
 	) {}

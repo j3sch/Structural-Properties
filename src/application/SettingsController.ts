@@ -2,42 +2,65 @@ import type { PlannedChange } from '../domain/changes';
 import type {
 	LinkStyle,
 	OnNoMatch,
-	StructuralMetadataSettings,
 	StructuralRule,
 	WritePolicy,
 } from '../domain/rules';
+import type { PluginSettings } from '../domain/plugin-data';
 import { validateDebounce } from '../settings';
 import type { PluginServices } from './PluginServices';
 
 export class SettingsController {
 	constructor(
-		private getCurrentSettings: () => StructuralMetadataSettings,
+		private getCurrentSettings: () => PluginSettings,
 		private services: PluginServices,
 		private persist: () => Promise<void>,
 	) {}
 
-	get settings(): StructuralMetadataSettings {
+	get settings(): PluginSettings {
 		return this.getCurrentSettings();
 	}
 
 	getControlValue(key: string): unknown {
-		return this.settings[key as keyof StructuralMetadataSettings];
+		switch (key) {
+			case 'automation.updateOnStructuralChanges':
+				return this.settings.automation.updateOnStructuralChanges;
+			case 'automation.updateOnFileOpen':
+				return this.settings.automation.updateOnFileOpen;
+			case 'automation.debounceMs':
+				return this.settings.automation.debounceMs;
+			case 'defaults.writePolicy':
+				return this.settings.defaults.writePolicy;
+			case 'defaults.onNoMatch':
+				return this.settings.defaults.onNoMatch;
+			case 'defaults.linkStyle':
+				return this.settings.defaults.linkStyle;
+			default:
+				throw new Error(`Unsupported declarative setting key: ${key}`);
+		}
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		switch (key) {
-			case 'debounceMs':
+			case 'automation.updateOnStructuralChanges':
+				if (typeof value !== 'boolean') return;
+				this.settings.automation.updateOnStructuralChanges = value;
+				break;
+			case 'automation.updateOnFileOpen':
+				if (typeof value !== 'boolean') return;
+				this.settings.automation.updateOnFileOpen = value;
+				break;
+			case 'automation.debounceMs':
 				if (typeof value !== 'number' || validateDebounce(value)) return;
-				this.settings.debounceMs = value;
+				this.settings.automation.debounceMs = value;
 				break;
-			case 'writePolicy':
-				this.settings.writePolicy = value as WritePolicy;
+			case 'defaults.writePolicy':
+				this.settings.defaults.writePolicy = value as WritePolicy;
 				break;
-			case 'onNoMatch':
-				this.settings.onNoMatch = value as OnNoMatch;
+			case 'defaults.onNoMatch':
+				this.settings.defaults.onNoMatch = value as OnNoMatch;
 				break;
-			case 'linkStyle':
-				this.settings.linkStyle = value as LinkStyle;
+			case 'defaults.linkStyle':
+				this.settings.defaults.linkStyle = value as LinkStyle;
 				break;
 			default:
 				throw new Error(`Unsupported declarative setting key: ${key}`);
@@ -77,5 +100,9 @@ export class SettingsController {
 
 	cleanManagedState(): Promise<number> {
 		return this.services.maintenance.pruneManagedState();
+	}
+
+	getManagedFileCount(): number {
+		return this.services.maintenance.getManagedFileCount();
 	}
 }

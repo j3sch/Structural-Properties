@@ -5,6 +5,7 @@ import {
 	type SettingDefinitionItem,
 } from 'obsidian';
 import type { SettingsController } from '../../application/SettingsController';
+import { buildAutomationDefinitions } from './definitions/automationDefinitions';
 import { buildDefaultDefinitions } from './definitions/defaultDefinitions';
 import { buildPatternDefinitions } from './definitions/patternDefinitions';
 import { buildRuleDefinitions } from './definitions/ruleDefinitions';
@@ -22,6 +23,7 @@ export class StructuralMetadataSettingsTab extends PluginSettingTab {
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		const refresh = (): void => this.update();
 		return [
+			...buildAutomationDefinitions(),
 			...buildDefaultDefinitions(),
 			...buildPatternDefinitions(this.controller, refresh),
 			...buildRuleDefinitions(this.app, this.controller, refresh),

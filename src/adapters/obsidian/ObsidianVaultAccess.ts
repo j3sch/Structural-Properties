@@ -1,5 +1,6 @@
 import { App, TFile, TFolder } from 'obsidian';
 import type { FileRef, FolderRef, VaultAccess } from '../../ports/VaultAccess';
+import { readFrontmatterFromFile } from './readFrontmatter';
 
 export class ObsidianVaultAccess implements VaultAccess {
 	constructor(private app: App) {}
@@ -23,7 +24,7 @@ export class ObsidianVaultAccess implements VaultAccess {
 	async readFrontmatter(path: string): Promise<Record<string, unknown> | null> {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return null;
-		return this.app.metadataCache.getFileCache(file)?.frontmatter ?? null;
+		return readFrontmatterFromFile(this.app, file);
 	}
 
 	getAllMarkdownFilePaths(): string[] {

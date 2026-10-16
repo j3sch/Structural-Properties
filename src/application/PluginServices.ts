@@ -1,4 +1,4 @@
-import type { StructuralMetadataSettings } from '../domain/rules';
+import type { PluginSettings } from '../domain/plugin-data';
 import { DiffEngine } from '../domain/core/DiffEngine';
 import { Formatter } from '../domain/core/Formatter';
 import { RuleEngine } from '../domain/core/RuleEngine';
@@ -21,7 +21,7 @@ export function createPluginServices(dependencies: {
 	frontmatter: FrontmatterRepository;
 	vault: VaultAccess;
 	linkGenerator: LinkGenerator;
-	getSettings: () => StructuralMetadataSettings;
+	getSettings: () => PluginSettings;
 	managedState: ManagedStateStore;
 	persist: () => Promise<void>;
 }): PluginServices {
@@ -38,6 +38,7 @@ export function createPluginServices(dependencies: {
 			dependencies.linkGenerator,
 			dependencies.getSettings,
 			dependencies.managedState,
+			dependencies.persist,
 		),
 		rules: new RuleService(
 			dependencies.getSettings,

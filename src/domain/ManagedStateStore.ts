@@ -50,13 +50,15 @@ export class ManagedStateStore {
 	}
 
 	/** Move all managed entries from `oldPath` to `newPath` (file rename). */
-	migratePath(oldPath: string, newPath: string): void {
-		if (oldPath === newPath) return;
+	migratePath(oldPath: string, newPath: string): boolean {
+		if (oldPath === newPath) return false;
 		const fileEntry = this.entries[oldPath];
 		if (fileEntry) {
 			this.entries[newPath] = fileEntry;
 			delete this.entries[oldPath];
+			return true;
 		}
+		return false;
 	}
 
 	/**

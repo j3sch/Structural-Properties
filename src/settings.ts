@@ -1,25 +1,34 @@
 import type {
 	FormatConfig,
 	LinkStyle,
-	ManagedState,
 	OnNoMatch,
 	ResolverConfig,
-	StructuralMetadataSettings,
 	StructuralRule,
 	WritePolicy,
-} from './types';
+} from './domain/rules';
+import type { ManagedState } from './domain/managed-state';
+import type {
+	LoadedPluginData,
+	PluginData,
+	PluginSettings,
+} from './domain/plugin-data';
 
 const WRITE_POLICIES = new Set<WritePolicy>(['always', 'empty-only', 'managed']);
 const NO_MATCH_POLICIES = new Set<OnNoMatch>(['ignore', 'clear-managed']);
 const LINK_STYLES = new Set<LinkStyle>(['full-path', 'obsidian-preference']);
 
-export function defaultSettings(): StructuralMetadataSettings {
+export function defaultSettings(): PluginSettings {
 	return {
-		schemaVersion: 2,
-		debounceMs: 750,
-		writePolicy: 'managed',
-		onNoMatch: 'clear-managed',
-		linkStyle: 'full-path',
+		automation: {
+			updateOnStructuralChanges: true,
+			updateOnFileOpen: true,
+			debounceMs: 750,
+		},
+		defaults: {
+			writePolicy: 'managed',
+			onNoMatch: 'clear-managed',
+			linkStyle: 'full-path',
+		},
 		excludePatterns: ['templater/**', 'templates/**', '**/*.excalidraw.md'],
 		folderNotePatterns: [
 			'{{folderPath}}/{{folderName}}.md',
@@ -27,29 +36,73 @@ export function defaultSettings(): StructuralMetadataSettings {
 			'{{folderPath}}.md',
 		],
 		rules: [],
+	};
+}
+
+export function defaultPluginData(): PluginData {
+	return {
+		schemaVersion: 3,
+		settings: defaultSettings(),
 		managedState: { entries: {} },
 	};
 }
 
-/** Parse persisted v2 data. Older schemas intentionally restart from defaults. */
-export function mergeSettings(loaded: unknown): StructuralMetadataSettings {
-	const defaults = defaultSettings();
-	if (!isRecord(loaded) || loaded.schemaVersion !== 2) return defaults;
+/** Accept only schema v3. Every other persisted shape intentionally restarts. */
+export function parsePluginData(loaded: unknown): LoadedPluginData {
+	const defaults = defaultPluginData();
+	if (!isRecord(loaded) || loaded.schemaVersion !== 3) {
+		return {
+			data: defaults,
+			resetFromV2: isRecord(loaded) && loaded.schemaVersion === 2,
+		};
+	}
+
+	const settings = isRecord(loaded.settings) ? loaded.settings : {};
+	const automation = isRecord(settings.automation) ? settings.automation : {};
+	const ruleDefaults = isRecord(settings.defaults) ? settings.defaults : {};
 
 	return {
-		schemaVersion: 2,
-		debounceMs: validDebounce(loaded.debounceMs) ? loaded.debounceMs : defaults.debounceMs,
-		writePolicy: isWritePolicy(loaded.writePolicy) ? loaded.writePolicy : defaults.writePolicy,
-		onNoMatch: isOnNoMatch(loaded.onNoMatch) ? loaded.onNoMatch : defaults.onNoMatch,
-		linkStyle: isLinkStyle(loaded.linkStyle) ? loaded.linkStyle : defaults.linkStyle,
-		excludePatterns: stringArray(loaded.excludePatterns) ?? defaults.excludePatterns,
-		folderNotePatterns: stringArray(loaded.folderNotePatterns) ?? defaults.folderNotePatterns,
-		rules: Array.isArray(loaded.rules)
-			? loaded.rules.filter(isStructuralRule)
-			: defaults.rules,
-		managedState: isManagedState(loaded.managedState)
-			? loaded.managedState
-			: defaults.managedState,
+		data: {
+			schemaVersion: 3,
+			settings: {
+				automation: {
+					updateOnStructuralChanges:
+						typeof automation.updateOnStructuralChanges === 'boolean'
+							? automation.updateOnStructuralChanges
+							: defaults.settings.automation.updateOnStructuralChanges,
+					updateOnFileOpen:
+						typeof automation.updateOnFileOpen === 'boolean'
+							? automation.updateOnFileOpen
+							: defaults.settings.automation.updateOnFileOpen,
+					debounceMs: validDebounce(automation.debounceMs)
+						? automation.debounceMs
+						: defaults.settings.automation.debounceMs,
+				},
+				defaults: {
+					writePolicy: isWritePolicy(ruleDefaults.writePolicy)
+						? ruleDefaults.writePolicy
+						: defaults.settings.defaults.writePolicy,
+					onNoMatch: isOnNoMatch(ruleDefaults.onNoMatch)
+						? ruleDefaults.onNoMatch
+						: defaults.settings.defaults.onNoMatch,
+					linkStyle: isLinkStyle(ruleDefaults.linkStyle)
+						? ruleDefaults.linkStyle
+						: defaults.settings.defaults.linkStyle,
+				},
+				excludePatterns:
+					stringArray(settings.excludePatterns) ?? defaults.settings.excludePatterns,
+				folderNotePatterns:
+					stringArray(settings.folderNotePatterns) ??
+					defaults.settings.folderNotePatterns,
+				rules: Array.isArray(settings.rules)
+					? settings.rules.filter(isStructuralRule)
+					: defaults.settings.rules,
+			},
+			managedState: isManagedState(loaded.managedState)
+				? loaded.managedState
+				: defaults.managedState,
+		},
+		resetFromV2: false,
 	};
 }
 

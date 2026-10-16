@@ -1,10 +1,10 @@
 import type {
 	FileRef,
 	FolderRef,
-	LinkGenerator,
-	LinkStyle,
 	VaultAccess,
-} from '../src/types';
+} from '../src/ports/VaultAccess';
+import type { LinkGenerator } from '../src/ports/LinkGenerator';
+import type { LinkStyle } from '../src/domain/rules';
 
 /**
  * In-memory implementation of {@link VaultAccess} for unit tests.

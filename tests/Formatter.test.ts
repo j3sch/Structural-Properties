@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Formatter } from '../src/domain/core/Formatter';
-import type { ResolverContext, ResolverResult } from '../src/types';
+import type { ResolverContext, ResolverResult } from '../src/domain/resolvers';
 import { MockVault, mockLinkGenerator } from './mocks';
 
 function ctx(filePath = '01 Projects/Captzy/note.md'): ResolverContext {

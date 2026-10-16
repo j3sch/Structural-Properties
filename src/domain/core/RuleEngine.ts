@@ -1,7 +1,7 @@
 import type { FrontmatterSnapshot, PlannedChange } from '../changes';
 import type { ManagedStateReader } from '../managed-state';
 import type { ResolverContext } from '../resolvers';
-import type { StructuralMetadataSettings } from '../rules';
+import type { PluginSettings } from '../plugin-data';
 import type { LinkGenerator } from '../../ports/LinkGenerator';
 import type { VaultAccess } from '../../ports/VaultAccess';
 import { ScopeMatcher } from './ScopeMatcher';
@@ -32,7 +32,7 @@ export class RuleEngine {
 	async planForFile(
 		filePath: string,
 		currentFrontmatter: FrontmatterSnapshot,
-		settings: StructuralMetadataSettings,
+		settings: PluginSettings,
 		managedState: ManagedStateReader,
 		vault: VaultAccess,
 		linkGenerator: LinkGenerator,
@@ -71,12 +71,12 @@ export class RuleEngine {
 			const result = await this.registry.resolve(rule.resolver, ctx);
 			const format =
 				rule.format.type === 'wikilink' && rule.format.style === undefined
-					? { ...rule.format, style: settings.linkStyle }
+					? { ...rule.format, style: settings.defaults.linkStyle }
 					: rule.format;
 			const formatted = this.formatter.format(result, format, ctx);
 
-			const writePolicy = rule.writePolicy ?? settings.writePolicy;
-			const onNoMatch = rule.onNoMatch ?? settings.onNoMatch;
+			const writePolicy = rule.writePolicy ?? settings.defaults.writePolicy;
+			const onNoMatch = rule.onNoMatch ?? settings.defaults.onNoMatch;
 			const oldValue = currentFrontmatter[rule.property];
 			const managed = managedState.getEntry(filePath, rule.property);
 
@@ -107,7 +107,7 @@ export class RuleEngine {
 			const ownerRule = allRules.find((r) => r.id === entry.ruleId);
 			if (!ownerRule || !ownerRule.enabled) continue;
 
-			const onNoMatch = ownerRule.onNoMatch ?? settings.onNoMatch;
+			const onNoMatch = ownerRule.onNoMatch ?? settings.defaults.onNoMatch;
 			const oldValue = currentFrontmatter[property];
 			const change = this.diffEngine.compute({
 				filePath,
@@ -117,7 +117,7 @@ export class RuleEngine {
 				result: { matched: false, resultType: 'raw' },
 				formatted: undefined,
 				oldValue,
-				writePolicy: ownerRule.writePolicy ?? settings.writePolicy,
+				writePolicy: ownerRule.writePolicy ?? settings.defaults.writePolicy,
 				onNoMatch,
 				managed: entry,
 			});

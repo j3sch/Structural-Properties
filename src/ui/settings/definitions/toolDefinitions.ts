@@ -43,7 +43,7 @@ export function buildToolDefinitions(
 			items: [
 				{
 					name: 'Clean managed state',
-					desc: `Remove tracking for missing files. Currently tracking ${Object.keys(controller.settings.managedState.entries).length} file(s).`,
+					desc: `Remove tracking for missing files. Currently tracking ${controller.getManagedFileCount()} file(s).`,
 					action: () => {
 						void controller.cleanManagedState().then((removed) => {
 							new Notice(`Structural properties: pruned ${removed} stale entries`);

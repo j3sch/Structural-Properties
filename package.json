@@ -1,6 +1,6 @@
 {
   "name": "obsidian-structural-properties",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Obsidian plugin that derives frontmatter properties from file paths, folder hierarchy and folder notes.",
   "main": "main.js",
   "type": "module",

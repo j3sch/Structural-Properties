@@ -7,7 +7,6 @@ export class CommandHandlers {
 	constructor(
 		private app: App,
 		private services: PluginServices,
-		private persist: () => Promise<void>,
 	) {}
 
 	async refreshCurrentFile(): Promise<void> {
@@ -52,9 +51,7 @@ export class CommandHandlers {
 	}
 
 	async processPaths(paths: string[]): Promise<ProcessorResult> {
-		const result = await this.services.processing.processPaths(paths);
-		await this.persist();
-		return result;
+		return this.services.processing.processPaths(paths);
 	}
 
 	private getActiveFile(): TFile | null {

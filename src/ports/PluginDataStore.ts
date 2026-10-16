@@ -1,6 +1,6 @@
-import type { StructuralMetadataSettings } from '../domain/rules';
+import type { LoadedPluginData, PluginData } from '../domain/plugin-data';
 
 export interface PluginDataStore {
-	load(): Promise<StructuralMetadataSettings>;
-	save(settings: StructuralMetadataSettings): Promise<void>;
+	load(): Promise<LoadedPluginData>;
+	save(data: PluginData): Promise<void>;
 }

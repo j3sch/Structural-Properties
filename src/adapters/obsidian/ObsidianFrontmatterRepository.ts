@@ -7,6 +7,8 @@ import type {
 import type { FrontmatterRepository } from '../../ports/FrontmatterRepository';
 import type { ManagedStateWriter } from '../../domain/managed-state';
 import { hashValue } from '../../utils/hash';
+import { applyCompareAndSet } from '../../application/applyCompareAndSet';
+import { readFrontmatterFromFile } from './readFrontmatter';
 
 export class ObsidianFrontmatterRepository implements FrontmatterRepository {
 	constructor(private app: App) {}
@@ -26,18 +28,15 @@ export class ObsidianFrontmatterRepository implements FrontmatterRepository {
 				errors += fileChanges.length;
 				continue;
 			}
-			await this.ensureFrontmatterSkeleton(file);
 			try {
+				const appliedChanges: PlannedChange[] = [];
 				await this.app.fileManager.processFrontMatter(
 					file,
 					(frontmatter: Record<string, unknown>) => {
-					for (const change of fileChanges) {
-						if (change.action === 'set') frontmatter[change.property] = change.newValue;
-						if (change.action === 'clear') delete frontmatter[change.property];
-					}
+						appliedChanges.push(...applyCompareAndSet(frontmatter, fileChanges));
 					},
 				);
-				for (const change of fileChanges) {
+				for (const change of appliedChanges) {
 					if (change.action === 'set') {
 						managedState.recordWrite(
 							filePath,
@@ -49,10 +48,9 @@ export class ObsidianFrontmatterRepository implements FrontmatterRepository {
 					} else if (change.action === 'clear') {
 						managedState.recordClear(filePath, change.property);
 						applied++;
-					} else {
-						skipped++;
 					}
 				}
+				skipped += fileChanges.length - appliedChanges.length;
 			} catch (error) {
 				errors += fileChanges.length;
 				console.error(`[Structural Properties] Failed to update "${filePath}":`, error);
@@ -65,12 +63,7 @@ export class ObsidianFrontmatterRepository implements FrontmatterRepository {
 	async readFrontmatter(filePath: string): Promise<FrontmatterSnapshot> {
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!(file instanceof TFile)) return {};
-		return this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-	}
-
-	private async ensureFrontmatterSkeleton(file: TFile): Promise<void> {
-		const content = await this.app.vault.cachedRead(file);
-		if (content.trim() === '') await this.app.vault.process(file, () => '---\n---\n');
+		return readFrontmatterFromFile(this.app, file);
 	}
 }
 

@@ -1,16 +1,16 @@
 import type { Plugin } from 'obsidian';
-import type { StructuralMetadataSettings } from '../../domain/rules';
+import type { LoadedPluginData, PluginData } from '../../domain/plugin-data';
 import type { PluginDataStore } from '../../ports/PluginDataStore';
-import { mergeSettings } from '../../settings';
+import { parsePluginData } from '../../settings';
 
 export class ObsidianPluginDataStore implements PluginDataStore {
 	constructor(private plugin: Plugin) {}
 
-	async load(): Promise<StructuralMetadataSettings> {
-		return mergeSettings(await this.plugin.loadData());
+	async load(): Promise<LoadedPluginData> {
+		return parsePluginData(await this.plugin.loadData());
 	}
 
-	async save(settings: StructuralMetadataSettings): Promise<void> {
-		await this.plugin.saveData(settings);
+	async save(data: PluginData): Promise<void> {
+		await this.plugin.saveData(data);
 	}
 }

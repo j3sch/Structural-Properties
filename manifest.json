@@ -1,7 +1,7 @@
 {
   "id": "structural-properties",
   "name": "Structural Properties",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "minAppVersion": "1.13.0",
   "description": "Derive frontmatter properties from file paths, folder hierarchy and folder notes.",
   "author": "j3sch",

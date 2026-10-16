@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultSettings, mergeSettings, validateDebounce, validateRule } from '../src/settings';
+import {
+	defaultPluginData,
+	parsePluginData,
+	validateDebounce,
+	validateRule,
+} from '../src/settings';
 import type { StructuralRule } from '../src/domain/rules';
 
 const validRule: StructuralRule = {
@@ -14,36 +19,104 @@ const validRule: StructuralRule = {
 	format: { type: 'text' },
 };
 
-describe('settings v2', () => {
-	it('uses a flat declarative settings model', () => {
-		const settings = defaultSettings();
-		assert.equal(settings.schemaVersion, 2);
-		assert.equal(settings.debounceMs, 750);
-		assert.equal('defaults' in settings, false);
-	});
-
-	it('intentionally resets legacy data', () => {
-		const settings = mergeSettings({ schemaVersion: 1, rules: [validRule] });
-		assert.deepEqual(settings.rules, []);
-		assert.equal(settings.schemaVersion, 2);
-	});
-
-	it('keeps valid v2 rules and repairs invalid scalar settings', () => {
-		const settings = mergeSettings({
-			...defaultSettings(),
-			debounceMs: -1,
-			rules: [validRule],
+describe('settings schema v3', () => {
+	it('has the exact canonical default structure', () => {
+		assert.deepEqual(defaultPluginData(), {
+			schemaVersion: 3,
+			settings: {
+				automation: {
+					updateOnStructuralChanges: true,
+					updateOnFileOpen: true,
+					debounceMs: 750,
+				},
+				defaults: {
+					writePolicy: 'managed',
+					onNoMatch: 'clear-managed',
+					linkStyle: 'full-path',
+				},
+				excludePatterns: ['templater/**', 'templates/**', '**/*.excalidraw.md'],
+				folderNotePatterns: [
+					'{{folderPath}}/{{folderName}}.md',
+					'{{folderPath}}/index.md',
+					'{{folderPath}}.md',
+				],
+				rules: [],
+			},
+			managedState: { entries: {} },
 		});
-		assert.equal(settings.debounceMs, 750);
-		assert.equal(settings.rules.length, 1);
 	});
 
-	it('drops malformed managed state safely', () => {
-		const settings = mergeSettings({
-			...defaultSettings(),
+	it('fully resets v2 data and marks it for a one-time notice', () => {
+		const loaded = parsePluginData({
+			schemaVersion: 2,
+			rules: [validRule],
+			managedState: { entries: { 'note.md': {} } },
+		});
+		assert.deepEqual(loaded.data, defaultPluginData());
+		assert.equal(loaded.resetFromV2, true);
+	});
+
+	it('fully resets unknown, missing, and non-object data', () => {
+		for (const oldData of [{ schemaVersion: 99 }, { rules: [validRule] }, 'old-data']) {
+			const loaded = parsePluginData(oldData);
+			assert.deepEqual(loaded.data, defaultPluginData());
+			assert.equal(loaded.resetFromV2, false);
+		}
+	});
+
+	it('retains and canonically validates valid v3 values', () => {
+		const loaded = parsePluginData({
+			schemaVersion: 3,
+			settings: {
+				automation: {
+					updateOnStructuralChanges: false,
+					updateOnFileOpen: false,
+					debounceMs: 120,
+				},
+				defaults: {
+					writePolicy: 'always',
+					onNoMatch: 'ignore',
+					linkStyle: 'obsidian-preference',
+				},
+				excludePatterns: ['private/**'],
+				folderNotePatterns: ['{{folderPath}}/index.md'],
+				rules: [validRule],
+				extra: 'discarded',
+			},
+			managedState: {
+				entries: {
+					'note.md': {
+						project: { property: 'project', ruleId: 'rule-1', valueHash: 'hash' },
+					},
+				},
+			},
+			extra: 'discarded',
+		});
+
+		assert.equal(loaded.data.settings.automation.updateOnFileOpen, false);
+		assert.equal(loaded.data.settings.defaults.writePolicy, 'always');
+		assert.deepEqual(loaded.data.settings.rules, [validRule]);
+		assert.deepEqual(loaded.data.managedState.entries['note.md'], {
+			project: { property: 'project', ruleId: 'rule-1', valueHash: 'hash' },
+		});
+		assert.deepEqual(Object.keys(loaded.data), ['schemaVersion', 'settings', 'managedState']);
+	});
+
+	it('repairs invalid v3 fields without preserving malformed state', () => {
+		const loaded = parsePluginData({
+			schemaVersion: 3,
+			settings: {
+				automation: { debounceMs: -1 },
+				defaults: { writePolicy: 'unsafe' },
+				rules: [validRule, { id: 'invalid' }],
+			},
 			managedState: { entries: { 'note.md': { type: { ruleId: 42 } } } },
 		});
-		assert.deepEqual(settings.managedState, { entries: {} });
+		assert.equal(loaded.data.settings.automation.debounceMs, 750);
+		assert.equal(loaded.data.settings.automation.updateOnFileOpen, true);
+		assert.equal(loaded.data.settings.defaults.writePolicy, 'managed');
+		assert.deepEqual(loaded.data.settings.rules, [validRule]);
+		assert.deepEqual(loaded.data.managedState, { entries: {} });
 	});
 
 	it('validates debounce and rule-specific fields', () => {
@@ -51,7 +124,11 @@ describe('settings v2', () => {
 		assert.match(validateDebounce(-1) ?? '', /greater than or equal/);
 		assert.deepEqual(validateRule(validRule), []);
 		assert.match(
-			validateRule({ ...validRule, property: '', resolver: { type: 'path-regex', pattern: '[' } }).join(' '),
+			validateRule({
+				...validRule,
+				property: '',
+				resolver: { type: 'path-regex', pattern: '[' },
+			}).join(' '),
 			/Property is required.*Regex pattern is invalid/,
 		);
 	});

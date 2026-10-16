@@ -1,9 +1,10 @@
 import type { SettingDefinitionItem } from 'obsidian';
-import type { StructuralMetadataSettings } from '../../../domain/rules';
-import { validateDebounce } from '../../../settings';
 import { LINK_STYLES, ON_NO_MATCH, WRITE_POLICIES, toRecord } from '../../ruleOptions';
 
-type SettingKey = keyof StructuralMetadataSettings;
+type SettingKey =
+	| 'defaults.writePolicy'
+	| 'defaults.onNoMatch'
+	| 'defaults.linkStyle';
 
 export function buildDefaultDefinitions(): SettingDefinitionItem<SettingKey>[] {
 	return [
@@ -12,24 +13,11 @@ export function buildDefaultDefinitions(): SettingDefinitionItem<SettingKey>[] {
 			heading: 'Defaults',
 			items: [
 				{
-					name: 'Debounce delay',
-					desc: 'Delay before processing a batch of file changes, in milliseconds.',
-					aliases: ['delay', 'batch processing'],
-					control: {
-						type: 'number',
-						key: 'debounceMs',
-						defaultValue: 750,
-						min: 0,
-						step: 50,
-						validate: validateDebounce,
-					},
-				},
-				{
 					name: 'Default write policy',
 					desc: 'Controls when a matching rule may replace an existing value.',
 					control: {
 						type: 'dropdown',
-						key: 'writePolicy',
+						key: 'defaults.writePolicy',
 						defaultValue: 'managed',
 						options: toRecord(WRITE_POLICIES),
 					},
@@ -39,7 +27,7 @@ export function buildDefaultDefinitions(): SettingDefinitionItem<SettingKey>[] {
 					desc: 'Controls what happens when a managed rule no longer matches.',
 					control: {
 						type: 'dropdown',
-						key: 'onNoMatch',
+						key: 'defaults.onNoMatch',
 						defaultValue: 'clear-managed',
 						options: toRecord(ON_NO_MATCH),
 					},
@@ -49,7 +37,7 @@ export function buildDefaultDefinitions(): SettingDefinitionItem<SettingKey>[] {
 					desc: 'Controls how generated links are written.',
 					control: {
 						type: 'dropdown',
-						key: 'linkStyle',
+						key: 'defaults.linkStyle',
 						defaultValue: 'full-path',
 						options: toRecord(LINK_STYLES),
 					},

@@ -69,15 +69,3 @@ export interface StructuralRule {
 	writePolicy?: WritePolicy;
 	onNoMatch?: OnNoMatch;
 }
-
-export interface StructuralMetadataSettings {
-	schemaVersion: 2;
-	debounceMs: number;
-	writePolicy: WritePolicy;
-	onNoMatch: OnNoMatch;
-	linkStyle: LinkStyle;
-	excludePatterns: string[];
-	folderNotePatterns: string[];
-	rules: StructuralRule[];
-	managedState: import('./managed-state').ManagedState;
-}
