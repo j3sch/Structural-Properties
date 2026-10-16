@@ -38,12 +38,13 @@ export class DiffEngine {
 			onNoMatch,
 			conflict: 'none',
 			reason: '',
+			...(input.linkTargetPath ? { linkTargetPath: input.linkTargetPath } : {}),
 		};
 
 		if (result.matched) {
-			return this.computeMatch(base, formatted, oldValue, writePolicy, managed);
+			return this.computeMatch(base, formatted, oldValue, writePolicy, managed, input.managedMatches);
 		}
-		return this.computeNoMatch(base, oldValue, onNoMatch, managed);
+		return this.computeNoMatch(base, oldValue, onNoMatch, managed, input.managedMatches);
 	}
 
 	private computeMatch(
@@ -52,10 +53,13 @@ export class DiffEngine {
 		oldValue: unknown,
 		writePolicy: DiffInput['writePolicy'],
 		managed: ManagedEntry | null,
+		managedMatches = !!managed && hashValue(oldValue) === managed.valueHash,
 	): PlannedChange {
 		if (writePolicy === 'always') {
 			if (valuesEqual(oldValue, newValue)) {
-				return { ...base, action: 'skip', reason: 'Already up to date' };
+				const tracked = managed?.ruleId === base.ruleId && managed.valueHash === hashValue(oldValue) &&
+					(!base.linkTargetPath || (managed.link?.targetPath === base.linkTargetPath && managed.link.value === oldValue && !managed.link.rewriteExpected));
+				return { ...base, action: tracked ? 'skip' : 'track', reason: tracked ? 'Already up to date' : 'Register current value (always)' };
 			}
 			return { ...base, action: 'set', reason: 'Value differs (always)' };
 		}
@@ -76,9 +80,11 @@ export class DiffEngine {
 			return { ...base, action: 'set', reason: 'Property empty (managed)' };
 		}
 
-		if (managed && hashValue(oldValue) === managed.valueHash) {
+		if (managed && managedMatches) {
 			if (valuesEqual(oldValue, newValue)) {
-				return { ...base, action: 'skip', reason: 'Already up to date (managed)' };
+				const tracked = managed.ruleId === base.ruleId && managed.valueHash === hashValue(oldValue) &&
+					(!base.linkTargetPath || (managed.link?.targetPath === base.linkTargetPath && managed.link.value === oldValue && !managed.link.rewriteExpected));
+				return { ...base, action: tracked ? 'skip' : 'track', reason: 'Already up to date (managed)' };
 			}
 			return { ...base, action: 'set', reason: 'Managed value updated' };
 		}
@@ -96,6 +102,7 @@ export class DiffEngine {
 		oldValue: unknown,
 		onNoMatch: DiffInput['onNoMatch'],
 		managed: ManagedEntry | null,
+		managedMatches = !!managed && hashValue(oldValue) === managed.valueHash,
 	): PlannedChange {
 		if (onNoMatch === 'ignore') {
 			return {
@@ -107,7 +114,7 @@ export class DiffEngine {
 		}
 
 		// clear-managed: only remove a value we previously managed
-		if (managed && hashValue(oldValue) === managed.valueHash) {
+		if (managed && managedMatches) {
 			return {
 				...base,
 				action: 'clear',

@@ -234,7 +234,9 @@ function isManagedState(value: unknown): value is ManagedState {
 				isRecord(entry) &&
 				entry.property === property &&
 				typeof entry.ruleId === 'string' &&
-				typeof entry.valueHash === 'string',
+				typeof entry.valueHash === 'string' &&
+				(entry.link === undefined || (isRecord(entry.link) &&
+					typeof entry.link.value === 'string' && typeof entry.link.targetPath === 'string')),
 		);
 	});
 }

@@ -31,3 +31,12 @@ describe('applyCompareAndSet', () => {
 		assert.deepEqual(applied, [stable]);
 	});
 });
+
+
+it('records ownership-only actions without mutating frontmatter and still checks the old value', () => {
+	const frontmatter = { type: 'note' };
+	const track = { ...change('type', 'note', 'note'), action: 'track' as const };
+	assert.deepEqual(applyCompareAndSet(frontmatter, [track]), [track]);
+	assert.deepEqual(frontmatter, { type: 'note' });
+	assert.deepEqual(applyCompareAndSet({ type: 'manual' }, [track]), []);
+});

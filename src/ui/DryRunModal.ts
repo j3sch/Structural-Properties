@@ -14,6 +14,7 @@ export class DryRunModal extends Modal {
     app: App,
     changes: PlannedChange[],
     onApply: () => Promise<void>,
+    private errors = 0,
   ) {
     super(app);
     this.changes = changes;
@@ -26,8 +27,10 @@ export class DryRunModal extends Modal {
     contentEl.empty();
 
     const actionable = this.changes.filter(
-      (c) => c.action === 'set' || c.action === 'clear',
+      (c) => c.action !== 'skip',
     );
+
+    if (this.errors > 0) contentEl.createEl('p', { text: `${this.errors} file(s) could not be planned; see console.` });
 
     if (this.changes.length === 0) {
       contentEl.createEl('p', {

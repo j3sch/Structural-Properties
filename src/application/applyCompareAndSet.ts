@@ -12,6 +12,8 @@ export function applyCompareAndSet(
 		if (change.action === 'set') {
 			frontmatter[change.property] = change.newValue;
 			applied.push(change);
+		} else if (change.action === 'track') {
+			applied.push(change);
 		} else if (change.action === 'clear') {
 			delete frontmatter[change.property];
 			applied.push(change);

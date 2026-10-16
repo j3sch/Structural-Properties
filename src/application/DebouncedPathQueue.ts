@@ -7,6 +7,7 @@ export class DebouncedPathQueue {
 	private paths = new Set<string>();
 	private timer: number | null = null;
 	private processing = false;
+	private stopped = false;
 
 	constructor(
 		private process: (paths: string[]) => Promise<void>,
@@ -15,11 +16,13 @@ export class DebouncedPathQueue {
 	) {}
 
 	enqueue(path: string): void {
+		if (this.stopped) return;
 		this.paths.add(path);
 		this.schedule();
 	}
 
 	stop(): void {
+		this.stopped = true;
 		if (this.timer !== null) this.scheduler.clear(this.timer);
 		this.timer = null;
 		this.paths.clear();

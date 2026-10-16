@@ -1,3 +1,6 @@
+import type { LinkGenerator } from '../ports/LinkGenerator';
+import { hashValue } from '../utils/hash';
+import { renamedPath, sameLinkPresentation, undoLinkRename } from '../utils/noteLink';
 import type { ManagedEntry, ManagedFileEntry, ManagedState } from './managed-state';
 
 /**
@@ -10,6 +13,7 @@ import type { ManagedEntry, ManagedFileEntry, ManagedState } from './managed-sta
  */
 export class ManagedStateStore {
 	private entries: Record<string, ManagedFileEntry>;
+	private renames: { oldPath: string; newPath: string }[] = [];
 
 	constructor(state?: ManagedState) {
 		this.entries = state ? cloneEntries(state.entries) : {};
@@ -25,6 +29,59 @@ export class ManagedStateStore {
 		return fileEntry[property] ?? null;
 	}
 
+	matchesValue(filePath: string, property: string, value: unknown, links: LinkGenerator): boolean {
+		const entry = this.getEntry(filePath, property);
+		if (!entry) return false;
+		if (hashValue(value) === entry.valueHash) return true;
+		if (typeof value !== 'string') return false;
+		const target = links.resolveLink(value, filePath);
+		if (!target) return false;
+		if (entry.link) return entry.link.rewriteExpected === true &&
+			target === entry.link.targetPath && sameLinkPresentation(entry.link.value, value);
+		let candidate = value;
+		let candidateTarget = target;
+		for (const rename of [...this.renames].reverse()) {
+			const previousTarget = renamedPath(candidateTarget, rename.newPath, rename.oldPath);
+			if (previousTarget === candidateTarget) continue;
+			candidate = undoLinkRename(candidate, rename.oldPath, rename.newPath);
+			candidateTarget = previousTarget;
+			if (hashValue(candidate) === entry.valueHash) return true;
+		}
+		return false;
+	}
+
+	/** Move known targets as well as sources; return sources needing re-evaluation. */
+	migrateLinkTargets(oldPath: string, newPath: string, linkProperties: string[] = []): string[] {
+		if (oldPath === newPath) return [];
+		this.renames.push({ oldPath, newPath });
+		const affected = new Set<string>();
+		for (const [path, properties] of Object.entries(this.entries)) {
+			for (const entry of Object.values(properties)) {
+				if (!entry.link) {
+					if (linkProperties.includes(entry.property)) affected.add(path);
+					continue;
+				}
+				const target = renamedPath(entry.link.targetPath, oldPath, newPath);
+				if (target !== entry.link.targetPath) {
+					entry.link = { ...entry.link, targetPath: target, rewriteExpected: true };
+					affected.add(path);
+				}
+			}
+		}
+		return [...affected];
+	}
+
+	forgetPath(path: string, folder = false): boolean {
+		let removed = false;
+		for (const key of Object.keys(this.entries)) {
+			if (key === path || (folder && key.startsWith(`${path}/`))) {
+				delete this.entries[key];
+				removed = true;
+			}
+		}
+		return removed;
+	}
+
 	/** All properties currently managed for a given file. */
 	getPropertiesForFile(filePath: string): string[] {
 		const fileEntry = this.entries[filePath];
@@ -37,9 +94,10 @@ export class ManagedStateStore {
 		property: string,
 		ruleId: string,
 		valueHash: string,
+		link?: ManagedEntry['link'],
 	): void {
 		if (!this.entries[filePath]) this.entries[filePath] = {};
-		this.entries[filePath][property] = { ruleId, property, valueHash };
+		this.entries[filePath][property] = { ruleId, property, valueHash, ...(link ? { link: { ...link } } : {}) };
 	}
 
 	recordClear(filePath: string, property: string): void {
@@ -54,6 +112,9 @@ export class ManagedStateStore {
 		if (oldPath === newPath) return false;
 		const fileEntry = this.entries[oldPath];
 		if (fileEntry) {
+			for (const entry of Object.values(fileEntry)) {
+				if (entry.link) entry.link = { ...entry.link, rewriteExpected: true };
+			}
 			this.entries[newPath] = fileEntry;
 			delete this.entries[oldPath];
 			return true;
@@ -68,6 +129,13 @@ export class ManagedStateStore {
 	migratePrefix(oldPrefix: string, newPrefix: string): number {
 		if (oldPrefix === newPrefix) return 0;
 		let migrated = 0;
+		for (const [path, properties] of Object.entries(this.entries)) {
+			if (path === oldPrefix || path.startsWith(`${oldPrefix}/`)) {
+				for (const entry of Object.values(properties)) {
+					if (entry.link) entry.link = { ...entry.link, rewriteExpected: true };
+				}
+			}
+		}
 		const oldDir = oldPrefix + '/';
 		const newDir = newPrefix + '/';
 		for (const filePath of Object.keys(this.entries)) {
@@ -133,7 +201,9 @@ function cloneEntries(
 	for (const filePath of Object.keys(entries)) {
 		const fileEntry = entries[filePath];
 		if (!fileEntry) continue;
-		out[filePath] = { ...fileEntry };
+		out[filePath] = Object.fromEntries(Object.entries(fileEntry).map(([property, entry]) =>
+			[property, { ...entry, ...(entry.link ? { link: { ...entry.link } } : {}) }],
+		));
 	}
 	return out;
 }

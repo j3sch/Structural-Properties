@@ -52,5 +52,7 @@ describe('DebouncedPathQueue', () => {
 		queue.enqueue('a.md');
 		queue.stop();
 		assert.equal(scheduler.cleared, true);
+		queue.enqueue('late.md');
+		assert.equal(scheduler.callback, null);
 	});
 });

@@ -37,6 +37,16 @@ export class EventController {
 			this.plugin.app.vault.on('rename', (file, oldPath) => this.handleRename(file, oldPath)),
 		);
 		this.plugin.registerEvent(
+			this.plugin.app.vault.on('delete', (file) => {
+				this.automaticUpdates.handleDeleted(file.path, file instanceof TFolder);
+			}),
+		);
+		this.plugin.registerEvent(
+			this.plugin.app.metadataCache.on('changed', (file) => {
+				if (isMarkdownFileRef(file)) this.automaticUpdates.handleMetadataChanged(file.path);
+			}),
+		);
+		this.plugin.registerEvent(
 			this.plugin.app.workspace.on('file-open', (file) => this.handleFileOpen(file)),
 		);
 	}

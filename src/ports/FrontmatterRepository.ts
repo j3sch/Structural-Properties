@@ -10,5 +10,6 @@ export interface FrontmatterRepository {
 	applyPlannedChanges(
 		changes: PlannedChange[],
 		managedState: ManagedStateWriter,
+		isStillValid?: () => boolean,
 	): Promise<ProcessorResult>;
 }

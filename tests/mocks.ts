@@ -1,3 +1,4 @@
+import { parseNoteLink } from '../src/utils/noteLink';
 import type {
 	FileRef,
 	FolderRef,
@@ -60,6 +61,10 @@ export class MockVault implements VaultAccess {
 
 /** A link generator that mimics the full-path/obsidian-preference behaviour. */
 export const mockLinkGenerator: LinkGenerator = {
+	resolveLink: (value) => {
+		const parsed = parseNoteLink(value);
+		return parsed ? parsed.path.replace(/\.md$/i, '') + '.md' : null;
+	},
 	generateLink: (
 		targetPath: string,
 		_sourcePath: string,

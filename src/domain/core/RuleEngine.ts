@@ -1,5 +1,5 @@
 import type { FrontmatterSnapshot, PlannedChange } from '../changes';
-import type { ManagedStateReader } from '../managed-state';
+import type { ManagedEntry, ManagedStateReader } from '../managed-state';
 import type { ResolverContext } from '../resolvers';
 import type { PluginSettings } from '../plugin-data';
 import type { LinkGenerator } from '../../ports/LinkGenerator';
@@ -80,7 +80,7 @@ export class RuleEngine {
 			const oldValue = currentFrontmatter[rule.property];
 			const managed = managedState.getEntry(filePath, rule.property);
 
-			const change = this.diffEngine.compute({
+			let change = this.diffEngine.compute({
 				filePath,
 				property: rule.property,
 				ruleId: rule.id,
@@ -91,8 +91,12 @@ export class RuleEngine {
 				writePolicy,
 				onNoMatch,
 				managed,
+				managedMatches: managedState.matchesValue(filePath, rule.property, oldValue, linkGenerator),
+				linkTargetPath: result.matched && result.resultType === 'file-ref' && format.type === 'wikilink'
+					? result.targetFilePath : undefined,
 			});
 
+			change = this.trackCurrentLink(change, managed, managedState, linkGenerator);
 			changes.push(change);
 		}
 
@@ -109,7 +113,7 @@ export class RuleEngine {
 
 			const onNoMatch = ownerRule.onNoMatch ?? settings.defaults.onNoMatch;
 			const oldValue = currentFrontmatter[property];
-			const change = this.diffEngine.compute({
+			let change = this.diffEngine.compute({
 				filePath,
 				property,
 				ruleId: ownerRule.id,
@@ -120,7 +124,9 @@ export class RuleEngine {
 				writePolicy: ownerRule.writePolicy ?? settings.defaults.writePolicy,
 				onNoMatch,
 				managed: entry,
+				managedMatches: managedState.matchesValue(filePath, property, oldValue, linkGenerator),
 			});
+			change = this.trackCurrentLink(change, entry, managedState, linkGenerator);
 			if (change.action !== 'skip') {
 				changes.push(change);
 			}
@@ -128,5 +134,15 @@ export class RuleEngine {
 		}
 
 		return changes;
+	}
+
+	private trackCurrentLink(change: PlannedChange, entry: ManagedEntry | null,
+		state: ManagedStateReader, links: LinkGenerator): PlannedChange {
+		if (change.action !== 'skip' || !entry || typeof change.oldValue !== 'string' ||
+			!state.matchesValue(change.filePath, change.property, change.oldValue, links)) return change;
+		const targetPath = links.resolveLink(change.oldValue, change.filePath);
+		if (!targetPath || (entry.link && entry.link.targetPath !== targetPath) || (entry.link?.targetPath === targetPath && entry.link.value === change.oldValue && !entry.link.rewriteExpected)) return change;
+		return { ...change, action: 'track', conflict: 'none', newValue: change.oldValue,
+			linkTargetPath: targetPath, reason: 'Refresh managed link identity without rewriting the note' };
 	}
 }

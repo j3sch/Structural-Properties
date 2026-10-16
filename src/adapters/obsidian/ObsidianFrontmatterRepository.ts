@@ -10,54 +10,63 @@ import { hashValue } from '../../utils/hash';
 import { applyCompareAndSet } from '../../application/applyCompareAndSet';
 import { readFrontmatterFromFile } from './readFrontmatter';
 
+class SkipFrontmatterWrite extends Error {}
+
 export class ObsidianFrontmatterRepository implements FrontmatterRepository {
 	constructor(private app: App) {}
 
 	async applyPlannedChanges(
 		changes: PlannedChange[],
 		managedState: ManagedStateWriter,
+		isStillValid: () => boolean = () => true,
 	): Promise<ProcessorResult> {
-		const byFile = groupByFile(changes);
 		let applied = 0;
+		let tracked = 0;
 		let skipped = 0;
 		let errors = 0;
-
-		for (const [filePath, fileChanges] of byFile) {
+		for (const [filePath, fileChanges] of groupByFile(changes)) {
 			const file = this.app.vault.getAbstractFileByPath(filePath);
-			if (!(file instanceof TFile)) {
-				errors += fileChanges.length;
-				continue;
-			}
+			if (!(file instanceof TFile)) { skipped += fileChanges.length; continue; }
+			const valid = (): boolean => isStillValid() && file.path === filePath &&
+				this.app.vault.getAbstractFileByPath(filePath) === file;
 			try {
-				const appliedChanges: PlannedChange[] = [];
-				await this.app.fileManager.processFrontMatter(
-					file,
-					(frontmatter: Record<string, unknown>) => {
-						appliedChanges.push(...applyCompareAndSet(frontmatter, fileChanges));
-					},
-				);
-				for (const change of appliedChanges) {
-					if (change.action === 'set') {
-						managedState.recordWrite(
-							filePath,
-							change.property,
-							change.ruleId,
-							hashValue(change.newValue),
-						);
-						applied++;
-					} else if (change.action === 'clear') {
-						managedState.recordClear(filePath, change.property);
-						applied++;
+				let accepted: PlannedChange[] = [];
+				if (fileChanges.every((change) => change.action === 'track')) {
+					// Ownership-only updates must not rewrite YAML or change the note's mtime.
+					const current = await readFrontmatterFromFile(this.app, file);
+					if (valid()) accepted = applyCompareAndSet(current, fileChanges);
+				} else if (valid()) {
+					try {
+						await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+							if (!valid()) throw new SkipFrontmatterWrite();
+							accepted = applyCompareAndSet(frontmatter, fileChanges);
+							if (accepted.every((change) => change.action === 'track')) throw new SkipFrontmatterWrite();
+						});
+					} catch (error) {
+						if (!(error instanceof SkipFrontmatterWrite)) throw error;
 					}
 				}
-				skipped += fileChanges.length - appliedChanges.length;
+				if (file.path !== filePath || this.app.vault.getAbstractFileByPath(filePath) !== file) accepted = [];
+				for (const change of accepted) {
+					if (change.action === 'clear') {
+						managedState.recordClear(filePath, change.property);
+						applied++;
+					} else {
+						managedState.recordWrite(filePath, change.property, change.ruleId, hashValue(change.newValue),
+							change.linkTargetPath && typeof change.newValue === 'string'
+								? { value: change.newValue, targetPath: change.linkTargetPath } : undefined);
+						if (change.action === 'track') tracked++;
+						else applied++;
+					}
+				}
+				skipped += fileChanges.length - accepted.length;
 			} catch (error) {
 				errors += fileChanges.length;
 				console.error(`[Structural Properties] Failed to update "${filePath}":`, error);
 				new Notice(`Structural properties: could not update "${filePath}" (see console)`, 5000);
 			}
 		}
-		return { applied, skipped, errors };
+		return { applied, skipped, errors, ...(tracked > 0 ? { tracked } : {}) };
 	}
 
 	async readFrontmatter(filePath: string): Promise<FrontmatterSnapshot> {

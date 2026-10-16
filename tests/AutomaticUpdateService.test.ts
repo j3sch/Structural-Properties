@@ -32,7 +32,11 @@ function createHarness() {
 	const scheduler = new FakeScheduler();
 	const batches: string[][] = [];
 	let saves = 0;
+	const affected = new Map<string, string[]>();
+	let revisions = 0;
 	const processing = {
+		invalidateStructure: () => { revisions++; },
+		getFolderNoteAffectedPaths: (paths: string[]) => paths.flatMap((path) => affected.get(path) ?? []),
 		processPaths: async (paths: string[]) => {
 			batches.push(paths);
 			return { applied: 0, skipped: 0, errors: 0 };
@@ -47,7 +51,7 @@ function createHarness() {
 		},
 		scheduler,
 	);
-	return { settings, managedState, scheduler, batches, get saves() { return saves; }, service };
+	return { settings, managedState, scheduler, batches, get saves() { return saves; }, get revisions() { return revisions; }, affected, service };
 }
 
 describe('AutomaticUpdateService', () => {
@@ -94,5 +98,36 @@ describe('AutomaticUpdateService', () => {
 		assert.equal(harness.saves, 2);
 		harness.scheduler.flush();
 		assert.deepEqual(harness.batches, []);
+	});
+});
+
+
+describe('folder-note event propagation', () => {
+	it('queues both affected trees on creation, move and deletion, including late metadata updates', async () => {
+		const h = createHarness();
+		h.affected.set('A/A.md', ['A/child.md']);
+		h.affected.set('B/B.md', ['B/child.md']);
+		h.service.handleCreated('A/A.md');
+		h.service.handleFileRenamed('A/A.md', 'B/B.md', true);
+		h.service.handleDeleted('B/B.md');
+		h.service.handleMetadataChanged('A/A.md');
+		h.scheduler.flush();
+		await Promise.resolve();
+		assert.deepEqual(new Set(h.batches.flat()), new Set(['A/A.md', 'A/child.md', 'B/B.md', 'B/child.md']));
+		assert.equal(h.revisions, 3);
+	});
+
+	it('rechecks tracked references after target renames and delayed link rewrites', async () => {
+		const h = createHarness();
+		const value = '[[A/A]]';
+		h.managedState.recordWrite('outside.md', 'link', 'r', hashValue(value), { value, targetPath: 'A/A.md' });
+		h.service.handleFolderRenamed('A', 'B', ['B/A.md']);
+		h.scheduler.flush();
+		await Promise.resolve();
+		assert.ok(h.batches.flat().includes('outside.md'));
+		h.service.handleMetadataChanged('outside.md');
+		h.scheduler.flush();
+		await Promise.resolve();
+		assert.equal(h.batches.at(-1)?.includes('outside.md'), true);
 	});
 });

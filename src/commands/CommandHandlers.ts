@@ -64,25 +64,22 @@ export class CommandHandlers {
 	private async runDryRun(paths: string[]): Promise<void> {
 		if (paths.length === 0) return this.notice('no processable files found');
 		new Notice(`Structural properties: planning for ${paths.length} file(s)…`);
-		const changes = await this.services.processing.planPaths(paths);
-		const actionablePaths = [
-			...new Set(
-				changes
-					.filter((change) => change.action === 'set' || change.action === 'clear')
-					.map((change) => change.filePath),
-			),
-		];
-		new DryRunModal(this.app, changes, async () => {
-			this.reportResult(await this.processPaths(actionablePaths), 'dry run apply');
-		}).open();
+		const preview = await this.services.processing.createPreview(paths);
+		new DryRunModal(this.app, preview.changes, async () => {
+			this.reportResult(await this.services.processing.applyPreview(preview), 'dry run apply');
+		}, preview.errors).open();
 	}
 
 	private reportResult(result: ProcessorResult, scope: string): void {
-		if (result.errors > 0) {
+		if (result.stale) {
+			new Notice(`Structural properties: preview or structure changed; ${result.applied} applied, ${result.skipped} skipped. Run a new preview.`, 7000);
+		} else if (result.errors > 0) {
 			new Notice(
 				`Structural properties (${scope}): ${result.applied} applied, ${result.errors} error(s)`,
 				6000,
 			);
+		} else if ((result.tracked ?? 0) > 0) {
+			new Notice(`Structural properties (${scope}): ${result.applied} value(s) updated, ${result.tracked} ownership record(s) updated`);
 		} else if (result.applied === 0) {
 			new Notice(`Structural properties (${scope}): nothing to change`);
 		} else {

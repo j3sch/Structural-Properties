@@ -14,7 +14,7 @@ const matched = (value: unknown): ResolverResult => ({
 const noMatch = (): ResolverResult => ({ matched: false, resultType: 'raw' });
 
 describe('DiffEngine', () => {
-	it('always: sets when different, skips when same', () => {
+	it('always: sets differences and registers already correct values', () => {
 		const c1 = diff.compute({
 			filePath: 'a.md', property: 'p', ruleId: 'r', ruleName: 'R',
 			result: matched('new'), formatted: 'new', oldValue: 'old',
@@ -27,7 +27,14 @@ describe('DiffEngine', () => {
 			result: matched('same'), formatted: 'same', oldValue: 'same',
 			writePolicy: 'always', onNoMatch: 'ignore', managed: null,
 		});
-		assert.equal(c2.action, 'skip');
+		assert.equal(c2.action, 'track');
+		const c3 = diff.compute({
+			filePath: 'a.md', property: 'p', ruleId: 'r', ruleName: 'R',
+			result: matched('same'), formatted: 'same', oldValue: 'same',
+			writePolicy: 'always', onNoMatch: 'clear-managed',
+			managed: { ruleId: 'r', property: 'p', valueHash: hashValue('same') },
+		});
+		assert.equal(c3.action, 'skip');
 	});
 
 	it('empty-only: sets when empty, skips when set', () => {

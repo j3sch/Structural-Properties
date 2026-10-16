@@ -1,9 +1,16 @@
 import { App, TFile } from 'obsidian';
 import type { LinkStyle } from '../../domain/rules';
+import { parseNoteLink } from '../../utils/noteLink';
 import type { LinkGenerator } from '../../ports/LinkGenerator';
 
 export class ObsidianLinkGenerator implements LinkGenerator {
 	constructor(private app: App) {}
+
+	resolveLink(value: string, sourcePath: string): string | null {
+		const parsed = parseNoteLink(value);
+		if (!parsed) return null;
+		return this.app.metadataCache.getFirstLinkpathDest(parsed.path, sourcePath)?.path ?? null;
+	}
 
 	generateLink(
 		targetPath: string,

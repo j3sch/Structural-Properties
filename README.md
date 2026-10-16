@@ -27,9 +27,20 @@ every write.
 
 | Policy              | Behaviour                                                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `managed` (default) | Writes when the property is empty or still holds the value the plugin last set. Manual edits are detected as user overrides and left alone. |
+| `managed` (default) | Writes when the property is empty or still holds the value the plugin last set. Manual edits are detected as user overrides and left alone. Known automatic link rewrites after renames retain ownership. |
 | `always`            | Always overwrites when the value differs.                                                                                                   |
 | `empty-only`        | Only writes when the property is missing or empty.                                                                                          |
+
+Already correct `always` values are registered as managed without rewriting the
+note. The dry run labels these state-only changes as `track`. Existing untracked
+values under `managed` are still protected; matching a derived value does not
+silently adopt a manual property.
+
+Managed links additionally remember their last accepted text and target inside
+plugin state. Source/target renames allow automatic path rewrites while changes
+to the target, alias, or heading remain protected. Legacy hash-only full-path
+links are recovered conservatively from known rename events. No note properties
+are added for tracking, and existing v3 settings/state are retained.
 
 When a rule no longer matches a file (e.g. it was moved out of scope), the
 `on-no-match` policy decides what happens:
@@ -66,7 +77,11 @@ All commands appear in the command palette under **Structural Properties**:
 - **Dry run entire vault**
 - **Clean managed state**
 
-Vault-wide writes should be reviewed with a dry run first.
+Vault-wide writes should be reviewed with a dry run first. Applying a preview
+only applies the displayed changes that still pass validation and compare-and-set.
+Newly discovered changes are never added to that operation. Settings or structural
+changes invalidate the preview; stale or manually edited values are skipped.
+Planning errors are reported in the preview.
 
 ## Automatic updates
 
@@ -80,6 +95,13 @@ Two global triggers control automatic processing:
 Both triggers are enabled by default and share a configurable debounce delay of
 750 ms. Disable both to use the plugin only through manual refresh commands.
 Trigger settings never disable the manual commands.
+
+Creating, deleting, moving, or renaming a folder note also queues affected
+descendants using the configured folder-note patterns (including `index.md` and
+sibling notes). Renamed link targets queue tracked references outside that tree.
+Metadata updates recheck tracked notes for delayed Obsidian link rewrites; when
+property-inheritance rules exist, changes to folder-note metadata also recheck
+descendants. Processing remains idempotent and stopped queues reject late work.
 
 ## Settings
 
